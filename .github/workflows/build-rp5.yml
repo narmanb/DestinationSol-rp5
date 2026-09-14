@@ -39,6 +39,9 @@ jobs:
       - name: Fetch Android frontend
         run: ./gradlew --no-daemon fetchAndroid
 
+      - name: Patch RP5 controller support
+        run: python3 rp5/patch_android.py
+
       - name: Build debug APK
         run: ./gradlew --no-daemon --stacktrace android:assembleDebug
 
@@ -52,6 +55,9 @@ jobs:
           unzip -l "$APK" | tee apk-contents.txt
           grep -q 'lib/arm64-v8a/libgdx.so' apk-contents.txt
           grep -q 'lib/arm64-v8a/libgdx-box2d.so' apk-contents.txt
+          for dex in $(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex$'); do
+            unzip -p "$APK" "$dex"
+          done | strings | grep -q 'AndroidControllers'
           mkdir -p artifact
           cp "$APK" artifact/destination-sol-rp5-debug.apk
           sha256sum artifact/destination-sol-rp5-debug.apk
