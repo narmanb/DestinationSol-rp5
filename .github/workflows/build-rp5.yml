@@ -1,0 +1,64 @@
+name: Build Destination Sol RP5
+
+on:
+  push:
+    branches:
+      - rp5-port
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Fetch Android frontend
+        run: ./gradlew --no-daemon fetchAndroid
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --stacktrace android:assembleDebug
+
+      - name: Validate APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find android/build/outputs/apk -type f -name '*.apk' | head -n 1)
+          test -n "$APK"
+          echo "APK=$APK"
+          unzip -l "$APK" | tee apk-contents.txt
+          grep -q 'lib/arm64-v8a/libgdx.so' apk-contents.txt
+          grep -q 'lib/arm64-v8a/libgdx-box2d.so' apk-contents.txt
+          mkdir -p artifact
+          cp "$APK" artifact/destination-sol-rp5-debug.apk
+          sha256sum artifact/destination-sol-rp5-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: destination-sol-rp5-debug
+          path: artifact/destination-sol-rp5-debug.apk
+          if-no-files-found: error
